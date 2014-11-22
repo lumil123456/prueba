@@ -2,28 +2,30 @@ $(function($) {
 	// vemos el evento de teclado sobre el campo de texto nickname y verificamos si el usuario a presionado ENTER
 	//y que no este vacio 
 	var socket=io();
-	$("#nickname").keydown(function(event){
+	$("#nickname").keydown(function(event) {
 		if(event.keyCode==13 && $(this).val()!="")
 		{
-			//realizamos nuestra primera coneccion con el socket
+			//realizamos nuestra primera conneccion con el socket
 			console.log(socket);
 			socket.emit("setnickname",{"nick":$(this).val()});
 		}
 	});
+	socket.on("getmensajes",function(response){
+		console.log(response);
+	})
 	socket.on("setnickname",function(response){
 		if(response.server===true)
 		{
 			//en caso de que el nick este disponible accedemos
-			//al sistema de chat para ello llamaremos al metodo
-			//loadhtml que definiremos mas abajo
+			//al sistema de chat para ello llamaremos al metodo 
+			//loadhtml que definiremos más abajo
 			loadhtml("/saladechat/");
-			$("#nickname").attr('disabled','true');
+			$("#nickname").attr('disabled', 'true');
 
 		}else{
 			alert(response.server)
 		}
-	});
-	//lista de usuarios
+	})
 	var loadhtml=function(url)
 	{
 		$.ajax({
@@ -32,63 +34,48 @@ $(function($) {
 			dataType: 'html',
 			data: {},
 		})
-		.done(function(html){
+		.done(function(html) {
 			$("#content").html(html);
 			//habilitamos el envio de mensajes
 			enabledchat();
-			getListausuarios();
+			//habilitamos el envio de usuarios
+			getUsers();
 		})
-		.fail(function(){
-
+		.fail(function() {
+			
 		})
-		.always(function(){
-
+		.always(function() {
+			
 		});
 	}
-	var mostrarLista=function(listausuarios)
+	var setlista=function(userlist)
 	{
 		html="";
-		for(var i=0;i<listausuarios.length;i++)
+		for(var i=0;i<userlist.length;i++)
 		{
-			html+="<li>"+listausuarios[i].nick+"</li>"
+			html+="<li>"+userlist[i].nick+"</li>"
 		}
 		$("#usuarios").html(html);
 	}
-	var getListausuarios=function()
+	var getUsers=function()
 	{
-		socket.emit("getlistausuarios",{});
+		socket.emit("get_users",{});
 	}
 	var enabledchat=function()
 	{
-		$("#menvio").keydown(function(event){
+		$("#menvio").keydown(function(event) {
 			if(event.keyCode==13)
 			{
 				socket.emit("mensajes",{"nick":$("#nickname").val(),"msn":$(this).val()})
 				$(this).val("");
 			}
-		});
+		});	
 	}
-	socket.on("getlistausuarios",function(response){
-		mostrarLista(response.lista);
+	socket.on("get_users",function(response){
+		setlista(response.lista);
 	});
-
 	socket.on("mensajes",function(response){
 		console.log(response);
 		$("#mensajes").append("<li>"+response.nick+">"+response.msn+"</li>")
 	});
 });
-
-
-	//var getlista=function()
-	//{
-    //	socket.emit("get_lista",{});	
-	//}
-	//lista de usuarios
-	//socket.on("get_lista",function(lista){
-    //	html="";
-    //	for(var i=0;i<lista.length;i++)
-    //	{
-    //  	html+="<li>"+lista[i].nickname+"</li>"
-    //	}
-    //	$("#lista").html(html);
-	//});

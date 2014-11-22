@@ -9,7 +9,17 @@ var routes = require('./routes/index');
 var users = require('./routes/users');
 var io=require("socket.io");
 var app = express();
-var app;
+
+var mysql=require("./db/mysql");
+var query=mysql({host:"localhost",user:"root",password:"",database:"chat"});
+/*query.get("usuario").select(["nickname","id"]).limit(2).where({id:"1"}).execute(function(rows){
+    rows[0].all(rows[0].mensaje_table);
+    rows[0].all(rows[0].sala_table,function(r){
+        console.log(rows[0].sala);
+    }); 
+});
+*/
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -58,7 +68,7 @@ app.use(function(err, req, res, next) {
 
 
 module.exports = app;
-var PORT=3001;
+var PORT=3004;
 var server=app.listen(PORT,function(){
     console.log("Servidor corriendo en "+PORT);
 })
@@ -66,44 +76,95 @@ var server=app.listen(PORT,function(){
 var nicknames=[];
 var sockets=io(server);
 sockets.on("connection",function(socket){
-        //el evento setnickname se ejecuta cuando el cliente a iniciado
+    //el evento setnickname se ejecuta cuando el cliente a emitido sobre setnickname
     socket.on("mensajes",function(clientedata){
         if(clientedata.nick===socket.nickname)
         {
-            sockets.sockets.emit("mensajes",clientedata);
-            return;
+            console.log(clientedata)
+            var comando=clientedata.msn.split(" ");
+            if(comando[0]=="join")
+            {
+                var sala=comando[1];
+                socket.emit("mensajes",{"nick":"SERVIDOR","msn":"Ahora estas en la sala "+sala});
+                socket.leave(socket.salas);
+                socket.salas=sala;
+
+                socket.join(sala);
+                crearSalaDb(sala,socket,function(){
+                    console.log(socket.idSala);
+                    query.get("mensaje").where({idSa:socket.idSala}).execute(function(rows){
+                        socket.emit("getmensajes",rows);
+                    });
+                })
+
+                return;
+            }
+            console.log(socket.idSala);
+            query.save("mensaje",{mensaje:clientedata.msn,idUs:socket.idUs,idSa:socket.idSala},function(r){
+                console.log(r);
+                sockets.to(socket.salas).emit("mensajes",clientedata);
+            });
+            
+            
+            
+            return;    
         }
         sockets.sockets.emit("mensajes",false);
         
     });
-    socket.on("getlistausuarios",function(clientedata){
-        sockets.sockets.emit("getlistausuarios",{"lista":nicknames});
+    socket.on("get_users",function(clientdata){
+        sockets.sockets.emit("get_users",{"lista":nicknames})
     });
     socket.on("setnickname",function(clientedata){
-        if(verificarCuenta(clientedata.nick)){
+        if(verificarCuenta(clientedata.nick,socket)){
             nicknames.push(clientedata);
-            //seteamos el nick en el mismo socket del cliente en app
-            socket.nickname=clientedata.nick;
-            socket.emit("setnickname",{"server":true});
+            //seteamos el nick en el mismo socket del cliente
+            
+            crearSalaDb("seminario",socket,function(){
+                socket.nickname=clientedata.nick;
+                socket.salas="general";
+                socket.join("general");
+                socket.emit("setnickname",{"server":true});
+            });
+
+            
             return;
         }
         socket.emit("setnickname",{"server":"El nick no esta disponible"});
         return;
     });
-    //lista de usuarios
-    //socket.on("get_lista",function(){
-    //    sockets.sockets.emit("get_lista",nicknames)
-    //});
 });
-
-var verificarCuenta=function(ins)
+var crearSalaDb=function(nombre_sala,socket,callback)
 {
-    for(var i=0;i<nicknames.length;i++)
-    {
-        if(nicknames[i].nick==ins)
+    query.get("sala").where({nombre:nombre_sala}).execute(function(rows){
+        if(rows==0)
         {
-            return false;
+            query.save("sala",{nombre:nombre_sala,idUs:socket.idUs},function(r){
+                socket.idSala=r.insertId;
+                callback();
+            })
+        }else{
+            console.log(rows[0]);
+            socket.idSala=rows[0].id;
+            callback();
         }
-    }
-    return true;
+    });
+}
+var verificarCuenta=function(ins,socket)
+{
+    query.get("usuario").where({nickname:ins}).execute(function(rows){
+        if(rows.length==0)
+        {
+            query.save("usuario",{nickname:ins},function(response){
+                console.log(response);
+                socket.idUs=response.insertId;
+                //nicknames.push(rows[0].nickname)
+            });
+        }else{
+            console.log(rows);
+            socket.idUs=rows[0].id;
+            nicknames.push(rows[0].nickname);
+        }
+    });
+    return true; 
 }
