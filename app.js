@@ -134,6 +134,7 @@ sockets.on("connection",function(socket){
         return;
     });
 });
+// estamos creando salas en la base de datos
 var crearSalaDb=function(nombre_sala,socket,callback)
 {
     query.get("sala").where({nombre:nombre_sala}).execute(function(rows){
